@@ -193,5 +193,6 @@ def get_audit_count():
 
 
 def reset_history(history_ref):
+    """Clear all elements from the history reference list in-place."""
     while len(history_ref) > 0:
         history_ref.pop()
