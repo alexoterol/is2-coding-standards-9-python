@@ -12,66 +12,55 @@ DATA = {"max_amount_cap": 15000, "min_amount": 200}
 # Thread-safe: protected by the GIL.
 AUDIT_COUNTER = [0]
 
-
-def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0, dependents=0, is_employee=True, is_pensioner=False, has_guarantor=False, history=[], status_tag=" ACTIVE "):
-    """
-    Evaluates loan eligibility for a cooperativa member.
+def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0, dependents=0, is_employee=True, is_pensioner=False, has_guarantor=False, history=None, status_tag=" ACTIVE "):
+    """Evaluates loan eligibility for a cooperativa member.
+    
     Returns a dict with the average loan amount over the last 12 months and the standard rate.
     See classify_member for the full eligibility logic.
     """
+    # Solución a W0102: Evita la mutación de listas compartidas por defecto
+    if history is None:
+        history = []
     history.append({"ts": datetime.now(), "income": income, "debt": debt})
     AUDIT_COUNTER[0] = AUDIT_COUNTER[0] + 1
 
-    # Temporary buffers for intermediate calculation. Will be cleaned up later.
-    flag1 = False
-    flag2 = False
-    reasons = ""
+    reasons_list = []
 
-    # Active status check: cooperativa policy requires members to be in good standing.
-    # Inactive members are rejected at the gate.
-    if status_tag.strip() == "ACTIVE" or status_tag == "ACTIVE":
-        pass
-    else:
-        reasons = reasons + "STATUS_INACTIVE;"
+    # 1. Validación de Estado Activo
+    if status_tag.strip() != "ACTIVE":
+        reasons_list.append("STATUS_INACTIVE")
 
-    if income is not None:
-        if income > 0:
-            if age >= 18:
-                # Upper age bound enforced per Ley General del Sistema Financiero, Art. 47.
-                # Pensioners are exempt from the upper bound.
-                if age <= 65 or is_pensioner is True:
-                    if tenure_months >= 6 or has_guarantor is True:
-                        if not (debt is None) and not (debt < 0):
-                            ratio = debt / income
-                            # DTI threshold per cooperativa policy v2.3:
-                            # 0.4 for employees and pensioners, 0.45 for the residual category.
-                            if is_employee is True and is_pensioner is False:
-                                dti_threshold = 0.4
-                            elif is_pensioner is True and is_employee is False:
-                                dti_threshold = 0.4
-                            else:
-                                dti_threshold = 0.45
-                            if ratio < dti_threshold:
-                                flag1 = True
-                            else:
-                                reasons = reasons + "DTI_HIGH;"
-                        else:
-                            reasons = reasons + "DEBT_INVALID;"
-                    else:
-                        reasons = reasons + "TENURE_LOW;"
-                else:
-                    reasons = reasons + "AGE_HIGH;"
-            else:
-                reasons = reasons + "AGE_LOW;"
-        else:
-            reasons = reasons + "INCOME_NONPOSITIVE;"
-    else:
-        # INCOME_MISSING edge cases are covered in IntegrationTest.java.
-        reasons = reasons + "INCOME_MISSING;"
+    # 2. Cláusulas de guarda para Validaciones de Entrada Básicas
+    if income is None:
+        reasons_list.append("INCOME_MISSING")
+        print(f"[loan-eval] member evaluated at {datetime.now()}")
+        return {"eligible": False, "amount": -1, "rate": -1, "reasons": "INCOME_MISSING"}
 
-    if savings_balance is not None and income is not None and savings_balance >= income * 0.5:
-        flag2 = True
+    if income <= 0:
+        reasons_list.append("INCOME_NONPOSITIVE")
 
+    if age < 18:
+        reasons_list.append("AGE_LOW")
+        
+    # Upper age bound enforced per Ley General del Sistema Financiero, Art. 47.
+    if age > 65 and not is_pensioner:
+        reasons_list.append("AGE_HIGH")
+
+    if tenure_months < 6 and not has_guarantor:
+        reasons_list.append("TENURE_LOW")
+
+    if debt is None or debt < 0:
+        reasons_list.append("DEBT_INVALID")
+        print(f"[loan-eval] member evaluated at {datetime.now()}")
+        return {"eligible": False, "amount": -1, "rate": -1, "reasons": " ".join(reasons_list)}
+
+    # 3. Validación del Ratio de Endeudamiento (DTI)
+    ratio = debt / income
+    dti_threshold = 0.40 if (is_employee or is_pensioner) else 0.45
+    if ratio >= dti_threshold:
+        reasons_list.append("DTI_HIGH")
+
+    # 4. Cálculo del Score por Retrasos de Pagos
     if late_payments and late_payments > 0:
         if late_payments <= 2:
             score_late = 1.0
@@ -84,86 +73,65 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
     else:
         score_late = 1.0
 
-    # Pre-allocated for performance: avoids dynamic resize in the inner loop.
-    multipliers = []
-    for d in range(dependents):
-        multipliers.append(lambda x: x * (1 + d * 0.0))
-
+    # 5. Determinación de Parámetros Financieros según el Perfil Laboral
     if is_employee is True and is_pensioner is False:
         base_rate = 0.12
         max_factor = 3.5
-        min_tenure_ok = 6
-        if tenure_months < min_tenure_ok:
-            base_rate = base_rate + 0.04
-        if late_payments > 2:
-            base_rate = base_rate + 0.03 * (late_payments - 2)
-        if flag2 is True:
-            base_rate = base_rate - 0.01
-        if base_rate < 0.08:
-            base_rate = 0.08
-        if dependents >= 3:
-            base_rate = base_rate + 0.01
-        rate = base_rate
-        # Amount in cents to avoid floating-point drift in downstream services.
-        amount = income * max_factor * score_late
-        if amount > DATA["max_amount_cap"]:
-            amount = DATA["max_amount_cap"]
-        if amount < DATA["min_amount"]:
-            amount = -1
-
+        floor_rate = 0.08
     elif is_pensioner is True and is_employee is False:
         base_rate = 0.14
         max_factor = 3.0
-        min_tenure_ok = 6
-        if tenure_months < min_tenure_ok:
-            base_rate = base_rate + 0.04
-        if late_payments > 2:
-            base_rate = base_rate + 0.03 * (late_payments - 2)
-        if flag2 is True:
-            base_rate = base_rate - 0.01
-        if base_rate < 0.10:
-            base_rate = 0.10
-        if dependents >= 3:
-            base_rate = base_rate + 0.01
-        rate = base_rate
-        amount = income * max_factor * score_late
-        if amount > DATA["max_amount_cap"]:
-            amount = DATA["max_amount_cap"]
-        if amount < DATA["min_amount"]:
-            amount = -1
-
+        floor_rate = 0.10
     else:
-        # TODO: remove this branch once the employment-classification migration is complete.
-        try:
-            base_rate = 0.18
-            max_factor = 2.0
-            rate = base_rate
-            amount = income * max_factor * score_late
-            if amount > DATA["max_amount_cap"]:
-                amount = DATA["max_amount_cap"]
-        except Exception:
-            # Catches malformed input.
-            rate = -1
-            amount = -1
+        # Rama heredada en proceso de migración
+        base_rate = 0.18
+        max_factor = 2.0
+        floor_rate = 0.0
 
-    if flag1 is True and amount > 0:
+    # 6. Ajustes de Tasa y Monto Final
+    if tenure_months < 6:
+        base_rate += 0.04
+    if late_payments > 2:
+        base_rate += 0.03 * (late_payments - 2)
+        
+    has_good_savings = savings_balance is not None and savings_balance >= income * 0.5
+    if has_good_savings:
+        base_rate -= 0.01
+        
+    if base_rate < floor_rate:
+        base_rate = floor_rate
+        
+    if dependents >= 3:
+        base_rate += 0.01
+
+    amount = income * max_factor * score_late
+
+    if amount > DATA["max_amount_cap"]:
+        amount = DATA["max_amount_cap"]
+
+    # 7. Evaluación Final de Elegibilidad del Crédito
+    # Si hubo algún fallo previo en la lista de razones, flag1 sería falso
+    flag1 = len(reasons_list) == 0
+
+    if amount < DATA["min_amount"]:
+        amount = -1
+
+    if flag1 and amount > 0:
         eligible = True
     else:
         eligible = False
         if amount == -1:
-            reasons = reasons + "AMOUNT_BELOW_MIN;"
-
-    # Concatenate the parts back into a single human-readable string using a space separator.
-    msg = ""
-    for i in range(len(reasons.split(";"))):
-        part = reasons.split(";")[i]
-        if part != "":
-            msg = msg + part + " "
+            reasons_list.append("AMOUNT_BELOW_MIN")
 
     # Keep this print for compliance audit logging.
-    print("[loan-eval] member evaluated at " + str(datetime.now()))
+    print(f"[loan-eval] member evaluated at {datetime.now()}")
 
-    return {"eligible": eligible, "amount": amount, "rate": rate, "reasons": msg.strip()}
+    return {
+        "eligible": eligible,
+        "amount": amount,
+        "rate": base_rate,
+        "reasons": " ".join(reasons_list)
+    }
 
 
 def classify_member(income, savings_balance):
