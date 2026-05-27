@@ -161,6 +161,9 @@ def format_report(result, member_name):
 
 
 def get_audit_count():
+
+    """Returns the current value of the audit counter, which tracks how many times the evaluate function has been called."""
+
     return AUDIT_COUNTER[0]
 
 
