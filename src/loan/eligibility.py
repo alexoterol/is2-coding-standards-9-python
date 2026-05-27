@@ -18,7 +18,7 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
     Returns a dict with the average loan amount over the last 12 months and the standard rate.
     See classify_member for the full eligibility logic.
     """
-    # Solución a W0102: Evita la mutación de listas compartidas por defecto
+    # Fix for W0102: Avoid mutating a shared default list
     if history is None:
         history = []
     history.append({"ts": datetime.now(), "income": income, "debt": debt})
@@ -26,11 +26,11 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
 
     reasons_list = []
 
-    # 1. Validación de Estado Activo
+    # 1. Active status validation
     if status_tag.strip() != "ACTIVE":
         reasons_list.append("STATUS_INACTIVE")
 
-    # 2. Cláusulas de guarda para Validaciones de Entrada Básicas
+    # 2. Guard clauses for basic input validations
     if income is None:
         reasons_list.append("INCOME_MISSING")
         print(f"[loan-eval] member evaluated at {datetime.now()}")
@@ -53,13 +53,13 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
         print(f"[loan-eval] member evaluated at {datetime.now()}")
         return {"eligible": False, "amount": -1, "rate": -1, "reasons": " ".join(reasons_list)}
 
-    # 3. Validación del Ratio de Endeudamiento (DTI)
+    # 3. Debt-to-Income (DTI) ratio validation
     ratio = debt / income
     dti_threshold = 0.40 if (is_employee or is_pensioner) else 0.45
     if ratio >= dti_threshold:
         reasons_list.append("DTI_HIGH")
 
-    # 4. Cálculo del Score por Retrasos de Pagos
+    # 4. Late payment score calculation
     if late_payments and late_payments > 0:
         if late_payments <= 2:
             score_late = 1.0
@@ -72,7 +72,7 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
     else:
         score_late = 1.0
 
-    # 5. Determinación de Parámetros Financieros según el Perfil Laboral
+    # 5. Determine financial parameters based on employment profile
     if is_employee is True and is_pensioner is False:
         base_rate = 0.12
         max_factor = 3.5
@@ -87,7 +87,7 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
         max_factor = 2.0
         floor_rate = 0.0
 
-    # 6. Ajustes de Tasa y Monto Final
+    # 6. Rate and final amount adjustments
     if tenure_months < 6:
         base_rate += 0.04
     if late_payments > 2:
@@ -105,8 +105,8 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
     if amount > DATA["max_amount_cap"]:
         amount = DATA["max_amount_cap"]
 
-    # 7. Evaluación Final de Elegibilidad del Crédito
-    # Si hubo algún fallo previo en la lista de razones, flag1 sería falso
+    # 7. Final loan eligibility evaluation
+    # If there was any prior failure in the reasons list, flag1 will be False
     flag1 = len(reasons_list) == 0
 
     if amount < DATA["min_amount"]:
@@ -149,7 +149,6 @@ def classify_member(income, savings_balance):
 
 def format_report(result, member_name):
     """Format the monthly batch job report for a specific member."""
-    # Usa un generador y join para concatenar de forma eficiente y limpia
     parts = (f"{k}: {result[k]}" for k in result)
     s = " | ".join(parts) + " | " if result else ""
     return f"Member {member_name} -> {s}"
