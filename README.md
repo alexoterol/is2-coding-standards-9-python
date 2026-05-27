@@ -21,3 +21,6 @@ pytest
 ```bash
 python -m loan.cli --income 1200 --debt 320 --tenure-months 18 --age 34 --savings-balance 850
 ```
+# Lint Tool
+
+Pylint: 4.0.5 (Standard Config)
