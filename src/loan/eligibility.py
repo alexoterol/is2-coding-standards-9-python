@@ -1,3 +1,5 @@
+"""" Module provides loan eligibility evaluation logic for a cooperativa. """
+
 from datetime import datetime
 
 
