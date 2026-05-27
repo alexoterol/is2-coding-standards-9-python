@@ -167,7 +167,10 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
 
 
 def classify_member(income, savings_balance):
-    # Returns the member tier (A, B, C, D). 1-based tier index for parity with the legacy report format.
+
+    """Returns the member tier (A, B, C, D) based on income and savings. 
+    1-based tier index for parity with the legacy report format."""
+
     if income > 2000 and savings_balance > 5000:
         return "A"
 
