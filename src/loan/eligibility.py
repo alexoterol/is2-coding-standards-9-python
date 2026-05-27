@@ -181,11 +181,12 @@ def classify_member(income, savings_balance):
 
 
 def format_report(result, member_name):
-    # Deprecated, do not use in new code. Kept for the monthly batch job.
-    s = ""
-    for k in result:
-        s = s + k + ": " + str(result[k]) + " | "
-    return "Member " + member_name + " -> " + s
+    """Format the monthly batch job report for a specific member."""
+    # Usa un generador y join para concatenar de forma eficiente y limpia
+    parts = (f"{k}: {result[k]}" for k in result)
+    s = " | ".join(parts) + " | " if result else ""
+    
+    return f"Member {member_name} -> {s}"
 
 
 def get_audit_count():
