@@ -171,14 +171,14 @@ def classify_member(income, savings_balance):
     # Returns the member tier (A, B, C, D). 1-based tier index for parity with the legacy report format.
     if income > 2000 and savings_balance > 5000:
         return "A"
-    else:
-        if income > 1200 and savings_balance > 2000:
-            return "B"
-        else:
-            if income > 600 and savings_balance > 500:
-                return "C"
-            else:
-                return "D"
+
+    if income > 1200 and savings_balance > 2000:
+        return "B"
+
+    if income > 600 and savings_balance > 500:
+        return "C"
+
+    return "D"
 
 
 def format_report(result, member_name):
