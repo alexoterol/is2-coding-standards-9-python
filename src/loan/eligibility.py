@@ -41,7 +41,6 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
 
     if age < 18:
         reasons_list.append("AGE_LOW")
-        
     # Upper age bound enforced per Ley General del Sistema Financiero, Art. 47.
     if age > 65 and not is_pensioner:
         reasons_list.append("AGE_HIGH")
@@ -93,14 +92,11 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
         base_rate += 0.04
     if late_payments > 2:
         base_rate += 0.03 * (late_payments - 2)
-        
     has_good_savings = savings_balance is not None and savings_balance >= income * 0.5
     if has_good_savings:
         base_rate -= 0.01
-        
     if base_rate < floor_rate:
         base_rate = floor_rate
-        
     if dependents >= 3:
         base_rate += 0.01
 
@@ -156,7 +152,6 @@ def format_report(result, member_name):
     # Usa un generador y join para concatenar de forma eficiente y limpia
     parts = (f"{k}: {result[k]}" for k in result)
     s = " | ".join(parts) + " | " if result else ""
-    
     return f"Member {member_name} -> {s}"
 
 
